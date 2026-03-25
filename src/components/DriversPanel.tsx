@@ -5,14 +5,17 @@ type Props = {
 
 export function DriversPanel({ drivers, summary }: Props) {
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-5">
-      <h2 className="text-lg font-semibold text-zinc-900">本周驱动因素</h2>
-      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-700">
+    <section className="rounded-xl bg-gdi-surface-low p-8">
+      <h2 className="font-headline text-sm font-bold uppercase tracking-widest">Market Context</h2>
+      <p className="mt-4 text-sm leading-relaxed text-gdi-on-surface">{summary}</p>
+      <ul className="mt-6 space-y-3 text-sm text-gdi-secondary">
         {drivers.map((driver) => (
-          <li key={driver}>{driver}</li>
+          <li key={driver} className="flex items-start gap-3">
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gdi-danger" />
+            <span className="text-xs leading-tight">{driver}</span>
+          </li>
         ))}
       </ul>
-      <p className="mt-4 border-l-2 border-zinc-300 pl-3 text-sm text-zinc-600">{summary}</p>
     </section>
   );
 }

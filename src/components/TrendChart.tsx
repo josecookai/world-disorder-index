@@ -5,9 +5,9 @@ type Props = {
 };
 
 export function TrendChart({ records }: Props) {
-  const width = 700;
-  const height = 220;
-  const padding = 24;
+  const width = 1000;
+  const height = 300;
+  const padding = 32;
   const max = 100;
   const min = 0;
 
@@ -22,24 +22,32 @@ export function TrendChart({ records }: Props) {
     .join(" ");
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-zinc-900">历史趋势</h2>
-        <span className="text-xs text-zinc-500">0 - 100</span>
+    <section className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <h2 className="font-headline text-sm font-bold uppercase tracking-widest">
+            12-Month Trend Analysis
+          </h2>
+          <p className="mt-1 text-[10px] font-medium text-gdi-outline">GDI Aggregate Score</p>
+        </div>
+        <div className="flex gap-2">
+          <button className="rounded bg-gdi-surface-low px-3 py-1 text-[10px] font-bold">1Y</button>
+          <button className="rounded px-3 py-1 text-[10px] font-bold hover:bg-gdi-surface-low">5Y</button>
+          <button className="rounded px-3 py-1 text-[10px] font-bold hover:bg-gdi-surface-low">ALL</button>
+        </div>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 h-56 w-full">
-        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#d4d4d8" />
-        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#d4d4d8" />
-        <path d={d} fill="none" stroke="#27272a" strokeWidth="3" />
-        {points.map((p) => (
-          <g key={p.date}>
-            <circle cx={p.x} cy={p.y} r="4" fill="#18181b" />
-            <text x={p.x} y={p.y - 10} textAnchor="middle" className="fill-zinc-600 text-[10px]">
-              {p.value}
-            </text>
-          </g>
-        ))}
-      </svg>
+      <div className="relative h-[360px] overflow-hidden rounded-xl border border-gdi-outline/20 bg-gdi-surface p-6">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full">
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#d9e4ea" />
+          <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#d9e4ea" />
+          <path d={d} fill="none" stroke="#5f5e5f" strokeWidth="2.5" />
+          {points.map((p) => (
+            <g key={p.date}>
+              <circle cx={p.x} cy={p.y} r="3.5" fill="#ba1e1e" />
+            </g>
+          ))}
+        </svg>
+      </div>
     </section>
   );
 }
