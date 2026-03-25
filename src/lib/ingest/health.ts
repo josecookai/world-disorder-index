@@ -25,20 +25,23 @@ type IngestHealthState = {
   runs: IngestSourceHealthSnapshot[];
 };
 
-const INGEST_HEALTH_PATH = path.join(process.cwd(), "data", "ingest-health.json");
 const MAX_STORED_RUNS = 100;
+
+function getIngestHealthPath() {
+  return path.join(process.cwd(), "data", "ingest-health.json");
+}
 
 function getSourceName(sourceKey: string): string {
   return getSourceByKey(sourceKey)?.name ?? sourceKey;
 }
 
 async function ensureStateDir() {
-  await mkdir(path.dirname(INGEST_HEALTH_PATH), { recursive: true });
+  await mkdir(path.dirname(getIngestHealthPath()), { recursive: true });
 }
 
 async function readState(): Promise<IngestHealthState> {
   try {
-    const raw = await readFile(INGEST_HEALTH_PATH, "utf8");
+    const raw = await readFile(getIngestHealthPath(), "utf8");
     const parsed = JSON.parse(raw) as Partial<IngestHealthState>;
     return { runs: Array.isArray(parsed.runs) ? parsed.runs : [] };
   } catch {
@@ -48,7 +51,7 @@ async function readState(): Promise<IngestHealthState> {
 
 async function writeState(state: IngestHealthState) {
   await ensureStateDir();
-  await writeFile(INGEST_HEALTH_PATH, JSON.stringify(state, null, 2), "utf8");
+  await writeFile(getIngestHealthPath(), JSON.stringify(state, null, 2), "utf8");
 }
 
 function getConsecutiveFailures(

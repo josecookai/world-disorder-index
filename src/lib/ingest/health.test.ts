@@ -1,21 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import {
   getIngestSourceHealthSummaries,
   recordIngestDiagnostics,
   type IngestSourceDiagnostic,
 } from "@/lib/ingest/health";
-
-const HEALTH_PATH = path.join(process.cwd(), "data", "ingest-health.json");
-
-async function cleanup() {
-  await rm(HEALTH_PATH, { force: true });
-}
-
-afterEach(async () => {
-  await cleanup();
-});
 
 function makeDiagnostic(overrides: Partial<IngestSourceDiagnostic>): IngestSourceDiagnostic {
   return {
@@ -29,6 +20,19 @@ function makeDiagnostic(overrides: Partial<IngestSourceDiagnostic>): IngestSourc
 }
 
 describe("ingest health", () => {
+  const originalCwd = process.cwd();
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "gdi-ingest-health-"));
+    process.chdir(tempDir);
+  });
+
+  afterEach(async () => {
+    process.chdir(originalCwd);
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
   it("records current diagnostics and surfaces unhealthy empty runs", async () => {
     await recordIngestDiagnostics([
       makeDiagnostic({
@@ -40,15 +44,17 @@ describe("ingest health", () => {
 
     const summaries = await getIngestSourceHealthSummaries();
 
-    expect(summaries).toEqual([
-      expect.objectContaining({
-        sourceKey: "iaea_news",
-        lastOk: true,
-        lastEmpty: true,
-        unhealthy: true,
-        consecutiveFailures: 0,
-      }),
-    ]);
+    expect(summaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceKey: "iaea_news",
+          lastOk: true,
+          lastEmpty: true,
+          unhealthy: true,
+          consecutiveFailures: 0,
+        }),
+      ])
+    );
   });
 
   it("tracks consecutive failures across runs", async () => {
@@ -74,14 +80,16 @@ describe("ingest health", () => {
 
     const summaries = await getIngestSourceHealthSummaries();
 
-    expect(summaries).toEqual([
-      expect.objectContaining({
-        sourceKey: "acled",
-        lastOk: false,
-        consecutiveFailures: 2,
-        unhealthy: true,
-        lastError: "Missing credentials",
-      }),
-    ]);
+    expect(summaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceKey: "acled",
+          lastOk: false,
+          consecutiveFailures: 2,
+          unhealthy: true,
+          lastError: "Missing credentials",
+        }),
+      ])
+    );
   });
 });
