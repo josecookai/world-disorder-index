@@ -195,6 +195,8 @@ export async function fetchCandidates(): Promise<CandidateEvent[]> {
   try {
     const data = await fetchJson<AcledResponse>(buildUrl(email, apiKey), {
       timeoutMs: 20000,
+      cacheTtlMs: 6 * 60 * 60 * 1000,
+      sourceKey: "acled",
     });
 
     if (!data.success) {

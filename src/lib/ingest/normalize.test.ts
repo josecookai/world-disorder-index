@@ -100,10 +100,10 @@ describe("normalize helpers", () => {
 
   it("filters out items below evidence-type-specific minimum confidence", () => {
     const items = [
-      makeCandidate({ title: "Structured keep", confidence: 0.65, evidenceType: "structured" }),
+      makeCandidate({ title: "Structured keep", confidence: 0.7, evidenceType: "structured" }),
       makeCandidate({
         title: "Official keep",
-        confidence: 0.75,
+        confidence: 0.78,
         sourceUrl: "https://example.com/b",
         evidenceType: "official",
       }),

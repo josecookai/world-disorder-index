@@ -17,7 +17,11 @@ const OPENSANCTIONS_TARGETS_URL =
 
 export async function fetchCandidates(): Promise<CandidateEvent[]> {
   try {
-    const payload = await fetchText(OPENSANCTIONS_TARGETS_URL, { timeoutMs: 20000 });
+    const payload = await fetchText(OPENSANCTIONS_TARGETS_URL, {
+      timeoutMs: 20000,
+      cacheTtlMs: 6 * 60 * 60 * 1000,
+      sourceKey: "opensanctions",
+    });
     const lines = payload
       .split(/\r?\n/)
       .map((line) => line.trim())

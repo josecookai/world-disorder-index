@@ -7,6 +7,7 @@ This directory defines the source registry and normalization primitives for the 
 The ingest layer pulls external source material into normalized `CandidateEvent` objects that can be:
 
 - previewed through the internal route `/api/gdi/ingest-preview`
+- executed on a schedule through `/api/internal/ingest/scheduled`
 - reviewed in the admin review workflow
 - promoted into reviewed and published drafts through the admin flow
 
@@ -21,6 +22,7 @@ The ingest layer is intentionally fail-soft:
 Internal preview endpoint:
 
 - `GET /api/gdi/ingest-preview`
+- `GET /api/internal/ingest/scheduled`
 
 Current response shape:
 
@@ -121,6 +123,42 @@ Supabase variables are not required to run ingest preview, but they are required
 - `gdelt_events` is expected to be high-volume and requires stronger downstream filtering
 - generic news APIs are noisy and should use stricter keyword gates and lower confidence defaults
 
+## Threshold calibration notes
+
+Current thresholds were reviewed against live preview behavior on `2026-03-25`:
+
+- `ofac_sdn` produced multiple valid sanctions candidates, but they were being over-merged because every row shared one export URL
+- `gdelt_events` showed upstream rate limiting and remains a noisy discovery layer when it does respond
+- `iaea_news` and `opensanctions` were intermittently unavailable, reinforcing the need to keep official and structured sources above the baseline floor
+
+Threshold updates from that review:
+
+- `structured`: `0.65 -> 0.70`
+- `official`: `0.75 -> 0.78`
+- `media`: unchanged at `0.85`
+
+Precedence updates from that review:
+
+- OFAC CSV rows now receive row-specific `sourceUrl` fragments so the global `sourceUrl` dedupe rule no longer collapses the whole export into one candidate
+- the existing precedence chain remains: evidence type, then source priority, then confidence, then recency
+
+## External fetch cache policy
+
+Caching is opt-in per source and only stores successful upstream responses.
+
+- `gdelt_events`: 15 minutes
+- `iaea_news`: 30 minutes
+- `acled`: 6 hours
+- `ofac_sdn`: 6 hours
+- `opensanctions`: 6 hours
+
+Rules:
+
+- cache is bypassed unless an adapter explicitly passes a TTL into `fetchText` or `fetchJson`
+- stale cache entries are never used to mask upstream failures
+- upstream fetches still use `cache: "no-store"`; the application-managed cache is the only cache layer
+- preview diagnostics now surface cache status when a source used the shared HTTP helper
+
 ## Source behavior and failure modes
 
 ### `gdelt_events`
@@ -207,3 +245,39 @@ npm test
 - `candidateCount` inside `diagnostics` is the raw count returned by each adapter before final aggregate filtering
 - `ok: false` means that source failed at runtime, but the overall run still succeeded
 - an empty `candidates` array is not necessarily a bug; it may indicate no qualifying events passed the thresholds
+
+## Scheduled execution
+
+The scheduled entrypoint is:
+
+- `GET /api/internal/ingest/scheduled`
+
+Authentication:
+
+- set `CRON_SECRET` for Vercel cron, or `INGEST_SCHEDULE_SECRET` for local fallback
+- send it as `Authorization: Bearer <secret>` or `x-ingest-schedule-secret`
+
+Operational model:
+
+- the route runs the same fail-soft ingest pipeline used by preview
+- adapter-level failures are captured in `diagnostics`
+- one failed source does not crash the full scheduled run
+- the latest run summary is written to `data/gdi-ingest-run.json`
+- the server also logs a `[scheduled-ingest]` line for each run
+
+Deployment:
+
+- this repository includes a `vercel.json` cron that triggers the route hourly
+
+Local operation:
+
+- start the app with `npm run dev`
+- set `INGEST_SCHEDULE_SECRET`
+- invoke the route manually or from `cron`
+
+Example:
+
+```bash
+curl http://localhost:3000/api/internal/ingest/scheduled \
+  -H "Authorization: Bearer $CRON_SECRET"
+```

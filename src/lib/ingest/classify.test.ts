@@ -67,8 +67,8 @@ describe("classify helpers", () => {
   });
 
   it("exposes evidence-type-specific thresholds", () => {
-    expect(getMinConfidenceForEvidenceType("structured")).toBe(0.65);
-    expect(getMinConfidenceForEvidenceType("official")).toBe(0.75);
+    expect(getMinConfidenceForEvidenceType("structured")).toBe(0.7);
+    expect(getMinConfidenceForEvidenceType("official")).toBe(0.78);
     expect(getMinConfidenceForEvidenceType("media")).toBe(0.85);
   });
 

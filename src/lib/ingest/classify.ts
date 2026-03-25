@@ -26,8 +26,8 @@ export const EVIDENCE_TYPE_PRECEDENCE: CandidateEvidenceType[] = [
 export const SOURCE_PRIORITY_PRECEDENCE: SourcePriority[] = ["P0", "P1", "P2", "P3"];
 
 export const MIN_CONFIDENCE_BY_EVIDENCE_TYPE: Record<CandidateEvidenceType, number> = {
-  structured: 0.65,
-  official: 0.75,
+  structured: 0.7,
+  official: 0.78,
   media: 0.85,
 };
 

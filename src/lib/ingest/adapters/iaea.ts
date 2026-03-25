@@ -7,7 +7,11 @@ const IAEA_RSS_URL = "https://www.iaea.org/news/rss";
 
 export async function fetchCandidates(): Promise<CandidateEvent[]> {
   try {
-    const xml = await fetchText(IAEA_RSS_URL, { timeoutMs: 15000 });
+    const xml = await fetchText(IAEA_RSS_URL, {
+      timeoutMs: 15000,
+      cacheTtlMs: 30 * 60 * 1000,
+      sourceKey: "iaea_news",
+    });
     return parseSimpleRssItems(xml)
       .map((item) => {
         if (!item.title || !item.link) return undefined;

@@ -49,7 +49,11 @@ function normalizeOccurredAt(value?: string): string {
 
 export async function fetchCandidates(): Promise<CandidateEvent[]> {
   try {
-    const data = await fetchJson<GdeltResponse>(buildQueryUrl(), { timeoutMs: 15000 });
+    const data = await fetchJson<GdeltResponse>(buildQueryUrl(), {
+      timeoutMs: 15000,
+      cacheTtlMs: 15 * 60 * 1000,
+      sourceKey: "gdelt_events",
+    });
     const preferredDimensions = [
       "military_conflict",
       "great_power_tension",
