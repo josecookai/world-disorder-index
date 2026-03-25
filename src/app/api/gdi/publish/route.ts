@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
+import { publishLatestRecord } from "@/lib/publish-workflow";
 
 export async function POST() {
-  return NextResponse.json(
-    {
-      ok: true,
-      message:
-        "MVP uses mock data. Replace with Supabase insert/update and status transition (reviewed -> published).",
-    },
-    { status: 200 }
-  );
+  const result = await publishLatestRecord();
+  return NextResponse.json({ ok: result.ok, message: result.message }, { status: result.status });
 }
