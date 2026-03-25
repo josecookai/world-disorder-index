@@ -46,6 +46,11 @@ function getStorePath(): string {
   return path.join(process.cwd(), "data", "ingest-candidates.json");
 }
 
+async function readLocalCandidates(): Promise<PersistedCandidate[]> {
+  const store = await readLocalStore();
+  return store.candidates.sort(comparePersistedCandidateOrder);
+}
+
 export function getCandidateId(candidate: CandidateEvent): string {
   return Buffer.from(
     [
@@ -86,6 +91,15 @@ function mapSupabaseRow(row: SupabaseCandidateRow): PersistedCandidate {
     impactDimension: row.impact_dimension,
     confidence: Number(row.confidence),
     evidenceType: row.evidence_type,
+    explainability: {
+      dimensionReason: row.raw_category
+        ? `Mapped to ${row.impact_dimension} from persisted raw category "${row.raw_category}".`
+        : `Mapped to ${row.impact_dimension} by persisted adapter rule.`,
+      ruleFamily: "persisted_candidate",
+      matchedKeywords: [],
+      sourceRationale: `${row.source} persisted from source ${row.source_key}.`,
+      evidenceRationale: `Evidence type ${row.evidence_type} restored from persisted candidate row.`,
+    },
     rawCategory: row.raw_category ?? undefined,
     rawRegion: row.raw_region ?? undefined,
     status: row.status,
@@ -117,8 +131,7 @@ async function writeLocalStore(store: LocalStore) {
 export async function listPersistedCandidates(): Promise<PersistedCandidate[]> {
   const supabase = getSupabaseServiceRoleClient();
   if (!supabase) {
-    const store = await readLocalStore();
-    return store.candidates.sort(comparePersistedCandidateOrder);
+    return readLocalCandidates();
   }
 
   const { data, error } = await supabase
@@ -129,11 +142,18 @@ export async function listPersistedCandidates(): Promise<PersistedCandidate[]> {
     .order("occurred_at", { ascending: false });
 
   if (error) {
-    const store = await readLocalStore();
-    return store.candidates.sort(comparePersistedCandidateOrder);
+    return readLocalCandidates();
   }
 
-  return ((data ?? []) as SupabaseCandidateRow[]).map(mapSupabaseRow).sort(comparePersistedCandidateOrder);
+  const localCandidates = await readLocalCandidates();
+  const localById = new Map(localCandidates.map((candidate) => [candidate.id, candidate]));
+
+  return ((data ?? []) as SupabaseCandidateRow[])
+    .map((row) => {
+      const candidate = mapSupabaseRow(row);
+      return localById.get(candidate.id) ?? candidate;
+    })
+    .sort(comparePersistedCandidateOrder);
 }
 
 export async function persistCandidates(candidates: CandidateEvent[]): Promise<PersistedCandidate[]> {

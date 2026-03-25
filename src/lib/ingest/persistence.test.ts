@@ -24,6 +24,13 @@ function makeCandidate(overrides: Partial<CandidateEvent> = {}): CandidateEvent 
     impactDimension: "military_conflict",
     confidence: 0.9,
     evidenceType: "structured",
+    explainability: {
+      dimensionReason: "Mapped to military_conflict by adapter-defined rule.",
+      ruleFamily: "adapter_mapping",
+      matchedKeywords: [],
+      sourceRationale: "ACLED is a structured conflict source.",
+      evidenceRationale: "Structured evidence from event_api source kind.",
+    },
     rawCategory: "Political violence / Battles",
     rawRegion: "Ukraine / Donetsk",
     ...overrides,
@@ -56,6 +63,9 @@ describe("ingest persistence", () => {
     expect(stored[0]).toMatchObject({
       title: candidates[0]?.title,
       status: "pending",
+      explainability: expect.objectContaining({
+        ruleFamily: "adapter_mapping",
+      }),
     });
     expect(JSON.parse(rawFile)).toMatchObject({
       candidates: [

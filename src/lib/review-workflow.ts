@@ -6,6 +6,7 @@ import {
   updatePersistedCandidateStatus,
   type PersistedCandidate,
 } from "@/lib/ingest/persistence";
+import { readReviewFeedback, refreshReviewFeedback, type ReviewFeedbackSummary } from "@/lib/review-feedback";
 import { enrichRecord } from "@/lib/scoring/engine";
 import type { GdiDimensionKey, GdiRecord } from "@/lib/types";
 
@@ -18,6 +19,11 @@ export type ReviewCandidate = PersistedCandidate & {
 type ReviewedDraft = GdiRecord & {
   acceptedCount: number;
   reviewedAt: string | null;
+};
+
+export type ReviewDashboardData = {
+  candidates: ReviewCandidate[];
+  feedback: ReviewFeedbackSummary;
 };
 
 const DIMENSION_WEIGHTS: Record<GdiDimensionKey, number> = {
@@ -74,6 +80,7 @@ export async function listReviewCandidates(): Promise<ReviewCandidate[]> {
   if (candidates.length === 0) {
     const ingestResult = await runIngestPreview();
     candidates = await persistCandidates(ingestResult.candidates);
+    await refreshReviewFeedback(candidates);
   }
 
   return candidates
@@ -90,15 +97,24 @@ export async function listReviewCandidates(): Promise<ReviewCandidate[]> {
     });
 }
 
+export async function getReviewDashboardData(): Promise<ReviewDashboardData> {
+  const candidates = await listReviewCandidates();
+  const feedback = await readReviewFeedback();
+
+  return { candidates, feedback };
+}
+
 export async function setReviewDecision(
   candidateId: string,
   decision: Exclude<ReviewDecision, "pending">
 ) {
   await updatePersistedCandidateStatus(candidateId, decision);
+  await refreshReviewFeedback(await listPersistedCandidates());
 }
 
 export async function clearReviewDecision(candidateId: string) {
   await updatePersistedCandidateStatus(candidateId, "pending");
+  await refreshReviewFeedback(await listPersistedCandidates());
 }
 
 export async function getReviewedDraft(): Promise<ReviewedDraft | null> {
