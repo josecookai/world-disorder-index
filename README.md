@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 世界完蛋了指数 (Global Disorder Index)
 
-## Getting Started
+Global Disorder Index (GDI) 是一个将复杂地缘风险压缩为 0-100 分的仪表盘产品。当前仓库已实现 v1.1 MVP：总分仪表盘、状态标签、WoW 变化、五维拆解、驱动因素、区间说明与趋势图，以及审核/发布后台骨架。
 
-First, run the development server:
+## Tech Stack
+
+- Next.js (App Router) + TypeScript + Tailwind CSS
+- Supabase (Postgres/Auth/RLS) ready
+- Zod for API schema validation
+
+## 快速开始
 
 ```bash
+git clone https://github.com/josecookai/world-disorder-index.git
+cd world-disorder-index
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+访问 `http://localhost:3000`。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 页面与接口
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/` 公开 Dashboard
+- `/admin/review` 候选事件审核页面（MVP 骨架）
+- `/admin/publish` 发布页面（MVP 骨架）
+- `GET /api/gdi/latest`
+- `GET /api/gdi/history?range=3M`
+- `GET /api/gdi/drivers`
+- `POST /api/gdi/publish`（当前为占位实现）
 
-## Learn More
+## 当前实现范围 (v1.1 MVP)
 
-To learn more about Next.js, take a look at the following resources:
+- Hero: 总分、标签、更新时间、WoW
+- 五维分项条
+- 本周驱动因素与一句话摘要
+- 历史趋势图
+- 风险区间说明
+- 方法论提示（非概率预测器）
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 下一步
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 接 Supabase 持久化审核流：`pending -> accepted/rejected -> published`
+- 完成管理员认证与 RLS
+- 增加事件注释层与市场映射模块
