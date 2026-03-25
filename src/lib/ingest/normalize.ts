@@ -1,16 +1,4 @@
-export type CandidateEvent = {
-  title: string;
-  source: string;
-  sourceUrl: string;
-  occurredAt: string;
-  impactDimension:
-    | "military_conflict"
-    | "great_power_tension"
-    | "trade_sanctions"
-    | "energy_shipping"
-    | "nuclear_miscalculation";
-  confidence: number;
-};
+import type { CandidateEvent } from "@/lib/ingest/events";
 
 function normalizeTitle(title: string): string {
   return title.trim().toLowerCase().replace(/\s+/g, " ");
@@ -21,9 +9,17 @@ export function dedupeCandidates(items: CandidateEvent[]): CandidateEvent[] {
   const result: CandidateEvent[] = [];
 
   for (const item of items) {
-    const key = `${normalizeTitle(item.title)}|${item.source}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const dedupeKeys = [
+      item.sourceUrl.trim(),
+      `${normalizeTitle(item.title)}|${item.sourceKey}`,
+      `${normalizeTitle(item.title)}|${item.source}`,
+    ].filter(Boolean);
+
+    if (dedupeKeys.some((key) => seen.has(key))) continue;
+
+    for (const key of dedupeKeys) {
+      seen.add(key);
+    }
     result.push(item);
   }
 
