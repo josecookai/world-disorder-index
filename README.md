@@ -28,6 +28,7 @@ npm run dev
 - `GET /api/gdi/history?range=3M`
 - `GET /api/gdi/drivers`
 - `POST /api/gdi/publish`（当前为占位实现）
+- `GET /api/internal/ingest/scheduled`（内部定时 ingest 入口，支持 `POST` 手动触发）
 
 ## 当前实现范围 (v1.1 MVP)
 
@@ -43,3 +44,47 @@ npm run dev
 - 接 Supabase 持久化审核流：`pending -> accepted/rejected -> published`
 - 完成管理员认证与 RLS
 - 增加事件注释层与市场映射模块
+
+## Scheduled ingest
+
+仓库现在提供一个内部定时 ingest 入口：
+
+- `GET /api/internal/ingest/scheduled`
+
+调度方式：
+
+- 部署环境：通过根目录 [`vercel.json`](/Users/bowenwang/Documents/Vibe%20Coding%20/世界完蛋了/vercel.json) 的 cron 每小时触发一次
+- 本地环境：在 `npm run dev` 运行时，用系统 `cron` 或任意 scheduler 定时 `curl` 这个内部路由
+
+鉴权方式：
+
+- 生产推荐使用 `CRON_SECRET`
+- 本地也可继续使用 `INGEST_SCHEDULE_SECRET`
+- 请求头支持 `Authorization: Bearer <secret>` 或 `x-ingest-schedule-secret: <secret>`
+
+行为说明：
+
+- 定时任务复用 ingest preview 的 fail-soft 执行模型
+- 单个 source 失败不会导致整个 scheduled run 失败
+- 每次执行都会把最近一次汇总写到 `data/gdi-ingest-run.json`
+- 每次执行都会输出一条结构化日志到 server console
+
+本地示例：
+
+```bash
+export CRON_SECRET=replace-with-a-long-random-secret
+curl http://localhost:3000/api/internal/ingest/scheduled \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+macOS / Linux crontab 示例：
+
+```bash
+0 * * * * curl -s http://localhost:3000/api/internal/ingest/scheduled -H "Authorization: Bearer $CRON_SECRET"
+```
+
+运维假设：
+
+- 这是内部入口，不应暴露到公开客户端
+- 生产环境需要配置 `CRON_SECRET`
+- 如果某个 adapter 上游故障，响应中的 `diagnostics` 和 server log 会保留错误信息，任务整体仍继续完成
