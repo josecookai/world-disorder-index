@@ -1,4 +1,4 @@
-import { buildCandidateEvent, classifyDimensionFromText } from "@/lib/ingest/classify";
+import { buildCandidateEvent, classifyDimensionFromTextDetailed } from "@/lib/ingest/classify";
 import type { CandidateEvent } from "@/lib/ingest/events";
 import { fetchJson } from "@/lib/ingest/http";
 import { getSourcesForDimension } from "@/lib/ingest/sources";
@@ -68,8 +68,9 @@ export async function fetchCandidates(): Promise<CandidateEvent[]> {
         const sourceUrl = article.url?.trim();
         if (!title || !sourceUrl) return undefined;
 
-        const impactDimension = classifyDimensionFromText(title, preferredDimensions);
-        if (!impactDimension) return undefined;
+        const dimensionMatch = classifyDimensionFromTextDetailed(title, preferredDimensions);
+        if (!dimensionMatch) return undefined;
+        const impactDimension = dimensionMatch.dimension;
 
         const allowed = getSourcesForDimension(impactDimension).some(
           (source) => source.key === "gdelt_events"
@@ -82,6 +83,11 @@ export async function fetchCandidates(): Promise<CandidateEvent[]> {
           sourceUrl,
           occurredAt: normalizeOccurredAt(article.seendate),
           impactDimension,
+          explainability: {
+            dimensionReason: dimensionMatch.dimensionReason,
+            ruleFamily: dimensionMatch.ruleFamily,
+            matchedKeywords: dimensionMatch.matchedKeywords,
+          },
           rawRegion: article.sourcecountry,
         });
       })

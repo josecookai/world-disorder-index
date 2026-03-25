@@ -125,22 +125,65 @@ Supabase variables are not required to run ingest preview, but they are required
 
 ## Threshold calibration notes
 
-Current thresholds were reviewed against live preview behavior on `2026-03-25`:
+Current thresholds were reviewed against live preview behavior on `2026-03-25`.
 
-- `ofac_sdn` produced multiple valid sanctions candidates, but they were being over-merged because every row shared one export URL
-- `gdelt_events` showed upstream rate limiting and remains a noisy discovery layer when it does respond
-- `iaea_news` and `opensanctions` were intermittently unavailable, reinforcing the need to keep official and structured sources above the baseline floor
+Observed preview sample from that run:
 
-Threshold updates from that review:
+- final retained candidates: `38`
+- dominant retained sources: `ofac_sdn` (`16`), `wto_news` (`10`), `un_security_council` (`9`), `eia_energy` (`3`)
+- empty/noisy/unavailable on that run: `gdelt_events` (`0`, upstream timeout), `iaea_news` (`0`, upstream `403`), `opensanctions` (`0`, timeout), `acled` (`0`, no local credentials)
 
-- `structured`: `0.65 -> 0.70`
-- `official`: `0.75 -> 0.78`
-- `media`: unchanged at `0.85`
+This matters because the calibrations are trying to solve two opposite failure modes:
 
-Precedence updates from that review:
+- false positives: broad text/news sources can flood preview with plausible but weak keyword matches
+- false negatives: official and structured sources can be sparse or intermittently unavailable, so when they do return usable candidates they should survive normalization
 
-- OFAC CSV rows now receive row-specific `sourceUrl` fragments so the global `sourceUrl` dedupe rule no longer collapses the whole export into one candidate
-- the existing precedence chain remains: evidence type, then source priority, then confidence, then recency
+Final threshold policy:
+
+- `structured = 0.70`
+  Reason: structured datasets and event APIs already arrive partially normalized, so the floor can be lower without admitting much narrative noise.
+  False positives addressed: blocks weak machine-readable rows that were assigned overly generous defaults.
+  False negatives accepted: still lets OFAC/OpenSanctions/ACLED-style records through when they are the best available signal.
+- `official = 0.78`
+  Reason: official feeds are high-trust on publisher identity but still text-derived and title-sensitive, so they need a slightly tighter floor than structured data.
+  False positives addressed: filters low-information official headlines that happen to match one keyword.
+  False negatives accepted: preserves WTO/EIA/IAEA/UNSC items once they have a clear dimension match.
+- `media = 0.85`
+  Reason: media is the noisiest path and is intended as corroboration, not the primary basis for scoring.
+  False positives addressed: suppresses generic article chatter from keyword-only matches.
+  False negatives accepted: media-only stories may be dropped unless they are unusually strong, which is intentional.
+
+These values are intentionally simple. They are not meant to express probability; they are just hard floors for keeping the candidate set reviewable.
+
+## Precedence calibration notes
+
+Final precedence chain:
+
+1. evidence type
+2. source priority
+3. confidence
+4. recency
+
+Tradeoff rationale:
+
+- evidence type first:
+  structured beats official, official beats media
+  Purpose: when duplicate narratives exist, keep the more normalized or authoritative representation rather than the louder one.
+- source priority second:
+  P0/P1 authoritative sources beat enrichment sources even if the latter have slightly higher confidence
+  Purpose: avoid a high-confidence backup source displacing the intended foundation source.
+- confidence third:
+  once evidence tier and source class are equal, keep the stronger match
+  Purpose: within the same source class, confidence is the simplest proxy for usefulness.
+- recency fourth:
+  freshness breaks ties, but only after source trust and match quality
+  Purpose: newer should not automatically beat better.
+
+Observed dedupe implications from the same review:
+
+- OFAC CSV rows now receive row-specific `sourceUrl` fragments so the `sourceUrl` conflict key no longer collapses the whole export into a single candidate
+- keeping recency last prevents a newer but weaker official item from displacing an older, better-matched official item
+- keeping media last in evidence precedence prevents broad discovery/news layers from outranking official or structured copies of the same event
 
 ## External fetch cache policy
 

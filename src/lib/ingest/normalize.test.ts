@@ -13,6 +13,13 @@ function makeCandidate(overrides: Partial<CandidateEvent>): CandidateEvent {
     impactDimension: "military_conflict",
     confidence: 0.8,
     evidenceType: "structured",
+    explainability: {
+      dimensionReason: "Matched 1 keyword for military_conflict.",
+      ruleFamily: "keyword_match",
+      matchedKeywords: ["missile"],
+      sourceRationale: "GDELT is a structured discovery source.",
+      evidenceRationale: "Structured evidence from event_api source kind.",
+    },
     ...overrides,
   };
 }

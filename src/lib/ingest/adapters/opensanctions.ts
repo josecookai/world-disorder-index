@@ -1,4 +1,4 @@
-import { buildCandidateEvent, classifyDimensionFromText } from "@/lib/ingest/classify";
+import { buildCandidateEvent, classifyDimensionFromTextDetailed } from "@/lib/ingest/classify";
 import type { CandidateEvent } from "@/lib/ingest/events";
 import { fetchText } from "@/lib/ingest/http";
 
@@ -42,9 +42,11 @@ export async function fetchCandidates(): Promise<CandidateEvent[]> {
         if (!title || !entity.id) return undefined;
 
         const description = [entity.schema, ...(entity.datasets ?? [])].filter(Boolean).join(" ");
-        const impactDimension =
-          classifyDimensionFromText(description, ["trade_sanctions", "great_power_tension"]) ??
-          "trade_sanctions";
+        const dimensionMatch = classifyDimensionFromTextDetailed(description, [
+          "trade_sanctions",
+          "great_power_tension",
+        ]);
+        const impactDimension = dimensionMatch?.dimension ?? "trade_sanctions";
 
         return buildCandidateEvent("opensanctions", {
           title: `OpenSanctions target: ${title}`,
@@ -52,6 +54,13 @@ export async function fetchCandidates(): Promise<CandidateEvent[]> {
           sourceUrl: `https://www.opensanctions.org/entities/${entity.id}/`,
           occurredAt: entity.last_seen ?? entity.first_seen ?? new Date().toISOString(),
           impactDimension,
+          explainability: {
+            dimensionReason:
+              dimensionMatch?.dimensionReason ??
+              "Defaulted to trade_sanctions because sanctions entities are ingest-priority targets.",
+            ruleFamily: dimensionMatch?.ruleFamily ?? "sanctions_default",
+            matchedKeywords: dimensionMatch?.matchedKeywords ?? [],
+          },
           rawCategory: entity.schema,
         });
       })

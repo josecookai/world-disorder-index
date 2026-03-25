@@ -4,6 +4,7 @@ import {
   buildCandidateEvent,
   compareCandidatePrecedence,
   classifyDimensionFromText,
+  classifyDimensionFromTextDetailed,
   getDefaultConfidence,
   getEvidenceTypeForSource,
   getMinConfidenceForEvidenceType,
@@ -17,6 +18,18 @@ describe("classify helpers", () => {
     );
 
     expect(dimension).toBe("trade_sanctions");
+  });
+
+  it("returns explainable keyword matches for dimension classification", () => {
+    const result = classifyDimensionFromTextDetailed(
+      "Officials announced a tariff and export ban after a growing trade dispute."
+    );
+
+    expect(result).toMatchObject({
+      dimension: "trade_sanctions",
+      ruleFamily: "keyword_match",
+    });
+    expect(result?.matchedKeywords).toEqual(expect.arrayContaining(["tariff", "export ban", "trade dispute"]));
   });
 
   it("limits classification to preferred dimensions", () => {
@@ -50,6 +63,7 @@ describe("classify helpers", () => {
 
     expect(event.confidence).toBe(0.8);
     expect(event.evidenceType).toBe("official");
+    expect(event.explainability.ruleFamily).toBe("adapter_mapping");
   });
 
   it("preserves explicit confidence when provided", () => {
@@ -97,5 +111,47 @@ describe("classify helpers", () => {
 
     expect(compareCandidatePrecedence(structured, official)).toBeLessThan(0);
     expect(compareCandidatePrecedence(official, media)).toBeLessThan(0);
+  });
+
+  it("prefers higher source priority before confidence within the same evidence tier", () => {
+    const p0 = buildCandidateEvent("wto_news", {
+      title: "Trade dispute update",
+      source: "WTO",
+      sourceUrl: "https://example.com/wto",
+      occurredAt: "2026-03-24T00:00:00Z",
+      impactDimension: "trade_sanctions",
+      confidence: 0.79,
+    });
+    const p1 = buildCandidateEvent("reuters_world", {
+      title: "Trade dispute update",
+      source: "Reuters",
+      sourceUrl: "https://example.com/reuters",
+      occurredAt: "2026-03-24T00:00:00Z",
+      impactDimension: "trade_sanctions",
+      confidence: 0.95,
+    });
+
+    expect(compareCandidatePrecedence(p0, p1)).toBeLessThan(0);
+  });
+
+  it("uses confidence before recency when evidence type and source priority tie", () => {
+    const stronger = buildCandidateEvent("iaea_news", {
+      title: "Safeguards alert",
+      source: "IAEA",
+      sourceUrl: "https://example.com/iaea-1",
+      occurredAt: "2026-03-20T00:00:00Z",
+      impactDimension: "nuclear_miscalculation",
+      confidence: 0.84,
+    });
+    const newerButWeaker = buildCandidateEvent("iaea_news", {
+      title: "Safeguards alert",
+      source: "IAEA",
+      sourceUrl: "https://example.com/iaea-2",
+      occurredAt: "2026-03-25T00:00:00Z",
+      impactDimension: "nuclear_miscalculation",
+      confidence: 0.8,
+    });
+
+    expect(compareCandidatePrecedence(stronger, newerButWeaker)).toBeLessThan(0);
   });
 });
