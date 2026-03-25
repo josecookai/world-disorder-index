@@ -1,9 +1,10 @@
 import type { CandidateEvidenceType, CandidateEvent } from "@/lib/ingest/events";
 import { DIMENSION_KEYWORDS } from "@/lib/ingest/keywords";
 import {
-  DEFAULT_CONFIDENCE_BY_KIND,
   getSourceByKey,
+  DEFAULT_CONFIDENCE_BY_KIND,
   type SourceKind,
+  type SourcePriority,
 } from "@/lib/ingest/sources";
 import type { GdiDimensionKey } from "@/lib/types";
 
@@ -16,6 +17,20 @@ const EVIDENCE_BY_KIND: Record<SourceKind, CandidateEvidenceType> = {
   news_api: "media",
 };
 
+export const EVIDENCE_TYPE_PRECEDENCE: CandidateEvidenceType[] = [
+  "structured",
+  "official",
+  "media",
+];
+
+export const SOURCE_PRIORITY_PRECEDENCE: SourcePriority[] = ["P0", "P1", "P2", "P3"];
+
+export const MIN_CONFIDENCE_BY_EVIDENCE_TYPE: Record<CandidateEvidenceType, number> = {
+  structured: 0.65,
+  official: 0.75,
+  media: 0.85,
+};
+
 export function getEvidenceTypeForSource(sourceKey: string): CandidateEvidenceType {
   const source = getSourceByKey(sourceKey);
   return source ? EVIDENCE_BY_KIND[source.kind] : "media";
@@ -24,6 +39,36 @@ export function getEvidenceTypeForSource(sourceKey: string): CandidateEvidenceTy
 export function getDefaultConfidence(sourceKey: string): number {
   const source = getSourceByKey(sourceKey);
   return source ? DEFAULT_CONFIDENCE_BY_KIND[source.kind] : 0.6;
+}
+
+export function getSourcePriorityRank(sourceKey: string): number {
+  const source = getSourceByKey(sourceKey);
+  if (!source) return SOURCE_PRIORITY_PRECEDENCE.length;
+
+  return SOURCE_PRIORITY_PRECEDENCE.indexOf(source.priority);
+}
+
+export function getEvidenceTypeRank(evidenceType: CandidateEvidenceType): number {
+  const rank = EVIDENCE_TYPE_PRECEDENCE.indexOf(evidenceType);
+  return rank === -1 ? EVIDENCE_TYPE_PRECEDENCE.length : rank;
+}
+
+export function getMinConfidenceForEvidenceType(evidenceType: CandidateEvidenceType): number {
+  return MIN_CONFIDENCE_BY_EVIDENCE_TYPE[evidenceType];
+}
+
+export function compareCandidatePrecedence(left: CandidateEvent, right: CandidateEvent): number {
+  const evidenceRankDiff =
+    getEvidenceTypeRank(left.evidenceType) - getEvidenceTypeRank(right.evidenceType);
+  if (evidenceRankDiff !== 0) return evidenceRankDiff;
+
+  const sourcePriorityDiff = getSourcePriorityRank(left.sourceKey) - getSourcePriorityRank(right.sourceKey);
+  if (sourcePriorityDiff !== 0) return sourcePriorityDiff;
+
+  const confidenceDiff = right.confidence - left.confidence;
+  if (confidenceDiff !== 0) return confidenceDiff;
+
+  return right.occurredAt.localeCompare(left.occurredAt);
 }
 
 export function classifyDimensionFromText(
