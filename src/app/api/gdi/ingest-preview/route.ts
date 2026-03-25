@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { runIngestPreview } from "@/lib/ingest";
 
 export async function GET() {
-  const { candidates, diagnostics } = await runIngestPreview();
+  const { candidates, diagnostics, sourceHealth } = await runIngestPreview();
   const previewCandidates = candidates.map((candidate) => ({
     source: candidate.source,
     sourceKey: candidate.sourceKey,
@@ -17,6 +17,7 @@ export async function GET() {
       count: previewCandidates.length,
       candidates: previewCandidates,
       diagnostics,
+      sourceHealth,
     },
     {
       status: 200,

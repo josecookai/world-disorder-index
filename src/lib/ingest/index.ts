@@ -1,10 +1,20 @@
 import { fetchCandidates as fetchAcledCandidates } from "@/lib/ingest/adapters/acled";
 import { fetchCandidates as fetchGdeltCandidates } from "@/lib/ingest/adapters/gdelt";
+import { fetchCandidates as fetchEiaCandidates } from "@/lib/ingest/adapters/eia";
 import { fetchCandidates as fetchIaeaCandidates } from "@/lib/ingest/adapters/iaea";
 import { fetchCandidates as fetchOfacCandidates } from "@/lib/ingest/adapters/ofac";
 import { fetchCandidates as fetchOpenSanctionsCandidates } from "@/lib/ingest/adapters/opensanctions";
+import { fetchCandidates as fetchUnSecurityCouncilCandidates } from "@/lib/ingest/adapters/un-security-council";
+import { fetchCandidates as fetchWtoCandidates } from "@/lib/ingest/adapters/wto";
 import { compareCandidatePrecedence } from "@/lib/ingest/classify";
 import type { CandidateEvent } from "@/lib/ingest/events";
+import {
+  getIngestSourceHealthSummaries,
+  recordIngestDiagnostics,
+  type IngestSourceDiagnostic,
+  type IngestSourceHealthSummary,
+} from "@/lib/ingest/health";
+import { takeFetchMetrics } from "@/lib/ingest/http";
 import { dedupeCandidates, filterByConfidence } from "@/lib/ingest/normalize";
 
 type AdapterDefinition = {
@@ -12,17 +22,10 @@ type AdapterDefinition = {
   fetchCandidates: () => Promise<CandidateEvent[]>;
 };
 
-export type IngestSourceDiagnostic = {
-  sourceKey: string;
-  ok: boolean;
-  candidateCount: number;
-  durationMs: number;
-  error?: string;
-};
-
 export type IngestRunResult = {
   candidates: CandidateEvent[];
   diagnostics: IngestSourceDiagnostic[];
+  sourceHealth: IngestSourceHealthSummary[];
 };
 
 const ADAPTERS: AdapterDefinition[] = [
@@ -31,6 +34,9 @@ const ADAPTERS: AdapterDefinition[] = [
   { key: "opensanctions", fetchCandidates: fetchOpenSanctionsCandidates },
   { key: "ofac_sdn", fetchCandidates: fetchOfacCandidates },
   { key: "iaea_news", fetchCandidates: fetchIaeaCandidates },
+  { key: "wto_news", fetchCandidates: fetchWtoCandidates },
+  { key: "eia_energy", fetchCandidates: fetchEiaCandidates },
+  { key: "un_security_council", fetchCandidates: fetchUnSecurityCouncilCandidates },
 ];
 
 function toErrorMessage(error: unknown): string {
@@ -56,6 +62,7 @@ async function runAdapter(adapter: AdapterDefinition): Promise<{
         ok: true,
         candidateCount: candidates.length,
         durationMs: Date.now() - startedAt,
+        empty: candidates.length === 0,
       },
     };
   } catch (error) {
@@ -66,6 +73,7 @@ async function runAdapter(adapter: AdapterDefinition): Promise<{
         ok: false,
         candidateCount: 0,
         durationMs: Date.now() - startedAt,
+        empty: true,
         error: toErrorMessage(error),
       },
     };
@@ -74,13 +82,34 @@ async function runAdapter(adapter: AdapterDefinition): Promise<{
 
 export async function runIngestPreview(): Promise<IngestRunResult> {
   const results = await Promise.all(ADAPTERS.map((adapter) => runAdapter(adapter)));
+  const fetchMetrics = takeFetchMetrics();
 
   const merged = results.flatMap((result) => result.candidates);
   const ordered = merged.sort(compareCandidatePrecedence);
+  const diagnostics = results.map((result) => {
+    const metric = fetchMetrics.find((entry) => entry.sourceKey === result.diagnostic.sourceKey);
+
+    return metric
+      ? {
+          ...result.diagnostic,
+          cacheStatus: metric.cacheStatus,
+          cacheAgeMs: metric.cacheAgeMs,
+        }
+      : result.diagnostic;
+  });
+  let sourceHealth: IngestSourceHealthSummary[] = [];
+
+  try {
+    await recordIngestDiagnostics(diagnostics);
+    sourceHealth = await getIngestSourceHealthSummaries();
+  } catch (error) {
+    console.warn("[ingest-health] persistence unavailable", error);
+  }
 
   return {
     candidates: filterByConfidence(dedupeCandidates(ordered)),
-    diagnostics: results.map((result) => result.diagnostic),
+    diagnostics,
+    sourceHealth,
   };
 }
 

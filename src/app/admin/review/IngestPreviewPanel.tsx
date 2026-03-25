@@ -5,13 +5,39 @@ import { useEffect, useState } from "react";
 type IngestPreviewCandidate = {
   title: string;
   source: string;
+  sourceKey: string;
   occurredAt: string;
   impactDimension: string;
+  confidence: number;
+};
+
+type IngestSourceDiagnostic = {
+  sourceKey: string;
+  ok: boolean;
+  candidateCount: number;
+  durationMs: number;
+  empty: boolean;
+  error?: string;
+};
+
+type IngestSourceHealth = {
+  sourceKey: string;
+  sourceName: string;
+  lastCheckedAt: string | null;
+  lastOk: boolean | null;
+  lastError?: string;
+  consecutiveFailures: number;
+  lastCandidateCount: number;
+  lastDurationMs: number;
+  lastEmpty: boolean;
+  unhealthy: boolean;
 };
 
 type IngestPreviewResponse = {
   count: number;
   candidates: IngestPreviewCandidate[];
+  diagnostics: IngestSourceDiagnostic[];
+  sourceHealth: IngestSourceHealth[];
 };
 
 function formatOccurredAt(value: string) {
@@ -32,6 +58,90 @@ function formatOccurredAt(value: string) {
 
 function getDimensionLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function getHealthTone(unhealthy: boolean) {
+  return unhealthy
+    ? "border-amber-300 bg-amber-50 text-amber-900"
+    : "border-emerald-300 bg-emerald-50 text-emerald-900";
+}
+
+function renderDiagnostics(data: IngestPreviewResponse) {
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+          <p className="text-xs uppercase tracking-wide text-zinc-500">Total Count</p>
+          <p className="mt-2 text-2xl font-semibold text-zinc-900">{data.count}</p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:col-span-3">
+          <p className="text-xs uppercase tracking-wide text-zinc-500">Preview Scope</p>
+          <p className="mt-2 text-sm text-zinc-700">
+            当前页面同时展示候选事件和 source diagnostics，便于 admin 判断哪些 source 健康、哪些 source 需要关注。
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {data.sourceHealth.map((item) => (
+          <article key={item.sourceKey} className={`rounded-xl border p-4 ${getHealthTone(item.unhealthy)}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">{item.sourceName}</p>
+                <p className="mt-1 text-xs uppercase tracking-wide">{item.sourceKey}</p>
+              </div>
+              <span className="rounded-full bg-white/70 px-2 py-1 text-[11px] font-medium">
+                {item.unhealthy ? "Needs Attention" : "Healthy"}
+              </span>
+            </div>
+            <div className="mt-3 space-y-1 text-xs">
+              <p>Last run: {item.lastCheckedAt ? formatOccurredAt(item.lastCheckedAt) : "never"}</p>
+              <p>Candidate count: {item.lastCandidateCount}</p>
+              <p>Duration: {item.lastDurationMs} ms</p>
+              <p>Empty result: {item.lastEmpty ? "yes" : "no"}</p>
+              <p>Repeated failures: {item.consecutiveFailures}</p>
+            </div>
+            {item.lastError ? <p className="mt-3 text-xs">{item.lastError}</p> : null}
+          </article>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-zinc-200">
+        <table className="min-w-full divide-y divide-zinc-200 text-sm">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <tr>
+              <th className="px-4 py-3 font-medium">Source</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Count</th>
+              <th className="px-4 py-3 font-medium">Duration</th>
+              <th className="px-4 py-3 font-medium">Detail</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 bg-white text-zinc-700">
+            {data.diagnostics.map((item) => (
+              <tr key={item.sourceKey}>
+                <td className="px-4 py-3 text-xs font-medium text-zinc-900">{item.sourceKey}</td>
+                <td className="px-4 py-3 text-xs">
+                  <span
+                    className={`rounded-full px-2 py-1 ${
+                      item.ok && !item.empty ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
+                    }`}
+                  >
+                    {item.ok ? (item.empty ? "Empty" : "Success") : "Failure"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-xs text-zinc-500">{item.candidateCount}</td>
+                <td className="px-4 py-3 text-xs text-zinc-500">{item.durationMs} ms</td>
+                <td className="px-4 py-3 text-xs text-zinc-500">
+                  {item.error ?? (item.empty ? "No candidates returned" : "OK")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 export function IngestPreviewPanel() {
@@ -126,25 +236,17 @@ export function IngestPreviewPanel() {
       ) : null}
 
       {!loading && !error && data?.count === 0 ? (
-        <div className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
-          当前没有可供预览的候选事件。说明本轮 ingest 没有返回通过筛选的 candidates。
-        </div>
+        <>
+          {renderDiagnostics(data)}
+          <div className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
+            当前没有可供预览的候选事件。说明本轮 ingest 没有返回通过筛选的 candidates。
+          </div>
+        </>
       ) : null}
 
       {!loading && !error && data && data.count > 0 ? (
         <div className="mt-4 space-y-4">
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Total Count</p>
-              <p className="mt-2 text-2xl font-semibold text-zinc-900">{data.count}</p>
-            </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 md:col-span-3">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Preview Scope</p>
-              <p className="mt-2 text-sm text-zinc-700">
-                当前表格显示 source、dimension、title、occurredAt，供 admin 在正式审核前快速扫读。
-              </p>
-            </div>
-          </div>
+          {renderDiagnostics(data)}
 
           <div className="overflow-hidden rounded-xl border border-zinc-200">
             <table className="min-w-full divide-y divide-zinc-200 text-sm">
@@ -154,6 +256,7 @@ export function IngestPreviewPanel() {
                 <th className="px-4 py-3 font-medium">Dimension</th>
                 <th className="px-4 py-3 font-medium">Title</th>
                 <th className="px-4 py-3 font-medium">Occurred At</th>
+                <th className="px-4 py-3 font-medium">Confidence</th>
               </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 bg-white text-zinc-700">
@@ -176,6 +279,9 @@ export function IngestPreviewPanel() {
                       <td className="px-4 py-3 text-sm text-zinc-900">{candidate.title}</td>
                       <td className="px-4 py-3 text-xs text-zinc-500">
                         {formatOccurredAt(candidate.occurredAt)}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-zinc-500">
+                        {candidate.confidence.toFixed(2)}
                       </td>
                     </tr>
                   );
