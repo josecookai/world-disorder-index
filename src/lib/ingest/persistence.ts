@@ -158,7 +158,7 @@ export async function listPersistedCandidates(): Promise<PersistedCandidate[]> {
     return readLocalCandidates();
   }
 
-  const localCandidates = await readLocalCandidates();
+  const localCandidates = canUseLocalIngestState() ? await readLocalCandidates() : [];
   const localById = new Map(localCandidates.map((candidate) => [candidate.id, candidate]));
 
   return ((data ?? []) as SupabaseCandidateRow[])

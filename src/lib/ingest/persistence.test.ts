@@ -9,6 +9,7 @@ import {
   persistCandidates,
   updatePersistedCandidateStatus,
 } from "@/lib/ingest/persistence";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 vi.mock("@/lib/supabase/server", () => ({
   getSupabaseServiceRoleClient: vi.fn(() => null),
@@ -104,5 +105,47 @@ describe("ingest persistence", () => {
       "Local ingest state is disabled in production"
     );
     await expect(listPersistedCandidates()).resolves.toEqual([]);
+  });
+
+  it("does not read local fallback in production when Supabase query succeeds", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("ALLOW_LOCAL_INGEST_STATE", "");
+
+    vi.mocked(getSupabaseServiceRoleClient).mockReturnValue({
+      from: () => ({
+        select: () => ({
+          order: async () => ({
+            data: [
+              {
+                candidate_key: "persisted-id",
+                title: "Persisted candidate",
+                source: "OFAC",
+                source_key: "ofac_sdn",
+                source_url: "https://example.com/ofac/1",
+                occurred_at: "2026-03-26T00:00:00.000Z",
+                impact_dimension: "trade_sanctions",
+                confidence: 0.9,
+                evidence_type: "structured",
+                raw_category: null,
+                raw_region: null,
+                status: "pending",
+                created_at: "2026-03-26T00:00:00.000Z",
+                updated_at: "2026-03-26T00:00:00.000Z",
+                reviewed_at: null,
+              },
+            ],
+            error: null,
+          }),
+        }),
+      }),
+    } as never);
+
+    await expect(listPersistedCandidates()).resolves.toMatchObject([
+      {
+        id: "persisted-id",
+        sourceKey: "ofac_sdn",
+        impactDimension: "trade_sanctions",
+      },
+    ]);
   });
 });
