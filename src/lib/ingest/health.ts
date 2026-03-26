@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FetchCacheStatus } from "@/lib/ingest/http";
+import { canUseLocalIngestState } from "@/lib/ingest/state";
 import { getSourceByKey } from "@/lib/ingest/sources";
 
 export type IngestSourceDiagnostic = {
@@ -36,10 +37,15 @@ function getSourceName(sourceKey: string): string {
 }
 
 async function ensureStateDir() {
+  if (!canUseLocalIngestState()) return;
   await mkdir(path.dirname(getIngestHealthPath()), { recursive: true });
 }
 
 async function readState(): Promise<IngestHealthState> {
+  if (!canUseLocalIngestState()) {
+    return { runs: [] };
+  }
+
   try {
     const raw = await readFile(getIngestHealthPath(), "utf8");
     const parsed = JSON.parse(raw) as Partial<IngestHealthState>;
@@ -50,6 +56,7 @@ async function readState(): Promise<IngestHealthState> {
 }
 
 async function writeState(state: IngestHealthState) {
+  if (!canUseLocalIngestState()) return;
   await ensureStateDir();
   await writeFile(getIngestHealthPath(), JSON.stringify(state, null, 2), "utf8");
 }

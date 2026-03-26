@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PersistedCandidate } from "@/lib/ingest/persistence";
 import { refreshReviewFeedback } from "@/lib/review-feedback";
 
@@ -37,10 +37,12 @@ describe("review feedback", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), "gdi-review-feedback-"));
     process.chdir(tempDir);
+    vi.stubEnv("NODE_ENV", "test");
   });
 
   afterEach(async () => {
     process.chdir(originalCwd);
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -72,5 +74,14 @@ describe("review feedback", () => {
       acceptedCount: 1,
       rejectedCount: 1,
     });
+  });
+
+  it("returns an in-memory summary when local ingest state is disabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    const summary = await refreshReviewFeedback([makeCandidate()]);
+
+    expect(summary.acceptedCount).toBe(1);
+    expect(summary.updatedAt).toBeTruthy();
   });
 });

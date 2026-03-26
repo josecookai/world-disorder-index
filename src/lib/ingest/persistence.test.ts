@@ -44,10 +44,12 @@ describe("ingest persistence", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), "gdi-ingest-persistence-"));
     process.chdir(tempDir);
+    vi.stubEnv("NODE_ENV", "test");
   });
 
   afterEach(async () => {
     process.chdir(originalCwd);
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -92,5 +94,15 @@ describe("ingest persistence", () => {
       status: "accepted",
     });
     expect(stored[0]?.reviewedAt).toBeTruthy();
+  });
+
+  it("disables local fallback in production when durable storage is unavailable", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("ALLOW_LOCAL_INGEST_STATE", "");
+
+    await expect(persistCandidates([makeCandidate()])).rejects.toThrow(
+      "Local ingest state is disabled in production"
+    );
+    await expect(listPersistedCandidates()).resolves.toEqual([]);
   });
 });

@@ -1,6 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { CandidateEvent } from "@/lib/ingest/events";
+import {
+  assertLocalIngestStateAvailable,
+  canUseLocalIngestState,
+  IngestStateUnavailableError,
+} from "@/lib/ingest/state";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type PersistedCandidateStatus = "pending" | "accepted" | "rejected";
@@ -47,6 +52,7 @@ function getStorePath(): string {
 }
 
 async function readLocalCandidates(): Promise<PersistedCandidate[]> {
+  assertLocalIngestStateAvailable("candidate persistence fallback");
   const store = await readLocalStore();
   return store.candidates.sort(comparePersistedCandidateOrder);
 }
@@ -110,6 +116,7 @@ function mapSupabaseRow(row: SupabaseCandidateRow): PersistedCandidate {
 }
 
 async function ensureStoreDir() {
+  assertLocalIngestStateAvailable("candidate persistence fallback");
   await mkdir(path.dirname(getStorePath()), { recursive: true });
 }
 
@@ -131,6 +138,7 @@ async function writeLocalStore(store: LocalStore) {
 export async function listPersistedCandidates(): Promise<PersistedCandidate[]> {
   const supabase = getSupabaseServiceRoleClient();
   if (!supabase) {
+    if (!canUseLocalIngestState()) return [];
     return readLocalCandidates();
   }
 
@@ -142,6 +150,11 @@ export async function listPersistedCandidates(): Promise<PersistedCandidate[]> {
     .order("occurred_at", { ascending: false });
 
   if (error) {
+    if (!canUseLocalIngestState()) {
+      throw new IngestStateUnavailableError(
+        "Durable candidate storage is unavailable and local fallback is disabled."
+      );
+    }
     return readLocalCandidates();
   }
 
@@ -170,6 +183,7 @@ export async function persistCandidates(candidates: CandidateEvent[]): Promise<P
   const supabase = getSupabaseServiceRoleClient();
 
   if (!supabase) {
+    assertLocalIngestStateAvailable("candidate persistence fallback");
     await writeLocalStore({ candidates: mergedCandidates });
     return mergedCandidates;
   }
@@ -196,6 +210,7 @@ export async function persistCandidates(candidates: CandidateEvent[]): Promise<P
     .upsert(payload, { onConflict: "candidate_key" });
 
   if (error) {
+    assertLocalIngestStateAvailable("candidate persistence fallback");
     await writeLocalStore({ candidates: mergedCandidates });
     return mergedCandidates;
   }
@@ -211,6 +226,7 @@ export async function updatePersistedCandidateStatus(
   const supabase = getSupabaseServiceRoleClient();
 
   if (!supabase) {
+    assertLocalIngestStateAvailable("candidate persistence fallback");
     const store = await readLocalStore();
     await writeLocalStore({
       candidates: store.candidates.map((candidate) =>
@@ -237,6 +253,7 @@ export async function updatePersistedCandidateStatus(
     .eq("candidate_key", candidateId);
 
   if (error) {
+    assertLocalIngestStateAvailable("candidate persistence fallback");
     const store = await readLocalStore();
     await writeLocalStore({
       candidates: store.candidates.map((candidate) =>

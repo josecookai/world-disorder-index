@@ -17,6 +17,20 @@ The ingest layer is intentionally fail-soft:
 - missing optional credentials must not crash the app
 - returning an empty array is acceptable when a source is unavailable or yields no usable events
 
+## Production state policy
+
+Local filesystem-backed ingest state under `data/` is now treated as a development fallback only.
+
+- Development and test: local state is enabled by default
+- Production: local state is disabled by default
+- Override: set `ALLOW_LOCAL_INGEST_STATE=true` only for explicitly controlled environments
+
+Production implication:
+
+- candidate persistence must use durable storage
+- local health snapshots, run summaries, feedback snapshots, and HTTP cache are best-effort only when local state is enabled
+- if durable candidate storage is unavailable in production, write paths should fail explicitly instead of silently writing local files
+
 ## Current preview route
 
 Internal preview endpoint:

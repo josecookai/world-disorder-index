@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { canUseLocalIngestState } from "@/lib/ingest/state";
 
 export type FetchCacheStatus = "hit" | "miss" | "refresh" | "bypass";
 
@@ -52,6 +53,7 @@ function getCacheFilePath(url: string, cacheKey?: string) {
 }
 
 async function ensureCacheDir() {
+  if (!canUseLocalIngestState()) return;
   await mkdir(getCacheDir(), { recursive: true });
 }
 
@@ -59,6 +61,8 @@ async function readCachedEntry(
   url: string,
   cacheKey?: string
 ): Promise<{ entry: CachedFetchEntry; ageMs: number } | null> {
+  if (!canUseLocalIngestState()) return null;
+
   try {
     const raw = await readFile(getCacheFilePath(url, cacheKey), "utf8");
     const entry = JSON.parse(raw) as CachedFetchEntry;
@@ -75,6 +79,7 @@ async function readCachedEntry(
 }
 
 async function writeCachedEntry(url: string, body: string, cacheKey?: string) {
+  if (!canUseLocalIngestState()) return;
   await ensureCacheDir();
   await writeFile(
     getCacheFilePath(url, cacheKey),

@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runIngestPreview, type IngestRunResult } from "@/lib/ingest";
+import { canUseLocalIngestState } from "@/lib/ingest/state";
 
 export type ScheduledIngestRunSummary = {
   startedAt: string;
@@ -15,10 +16,12 @@ export type ScheduledIngestRunSummary = {
 const INGEST_RUN_STATE_PATH = path.join(process.cwd(), "data", "gdi-ingest-run.json");
 
 async function ensureStateDir() {
+  if (!canUseLocalIngestState()) return;
   await mkdir(path.dirname(INGEST_RUN_STATE_PATH), { recursive: true });
 }
 
 async function writeRunSummary(summary: ScheduledIngestRunSummary) {
+  if (!canUseLocalIngestState()) return;
   await ensureStateDir();
   await writeFile(INGEST_RUN_STATE_PATH, JSON.stringify(summary, null, 2), "utf8");
 }

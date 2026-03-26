@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { PersistedCandidate } from "@/lib/ingest/persistence";
+import { canUseLocalIngestState } from "@/lib/ingest/state";
 
 type ReviewedCandidate = PersistedCandidate & {
   status: "accepted" | "rejected";
@@ -57,6 +58,7 @@ function toSortedEntries(map: Map<string, { accepted: number; rejected: number }
 }
 
 async function ensureDir() {
+  if (!canUseLocalIngestState()) return;
   await mkdir(path.dirname(getReviewFeedbackPath()), { recursive: true });
 }
 
@@ -102,12 +104,18 @@ export async function refreshReviewFeedback(candidates: PersistedCandidate[]): P
   };
 
   await ensureDir();
-  await writeFile(getReviewFeedbackPath(), JSON.stringify(summary, null, 2), "utf8");
+  if (canUseLocalIngestState()) {
+    await writeFile(getReviewFeedbackPath(), JSON.stringify(summary, null, 2), "utf8");
+  }
 
   return summary;
 }
 
 export async function readReviewFeedback(): Promise<ReviewFeedbackSummary> {
+  if (!canUseLocalIngestState()) {
+    return emptySummary();
+  }
+
   try {
     const raw = await readFile(getReviewFeedbackPath(), "utf8");
     return JSON.parse(raw) as ReviewFeedbackSummary;

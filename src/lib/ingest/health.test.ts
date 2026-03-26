@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -26,10 +26,12 @@ describe("ingest health", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), "gdi-ingest-health-"));
     process.chdir(tempDir);
+    vi.stubEnv("NODE_ENV", "test");
   });
 
   afterEach(async () => {
     process.chdir(originalCwd);
+    vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -91,5 +93,18 @@ describe("ingest health", () => {
         }),
       ])
     );
+  });
+
+  it("returns empty health state when local ingest state is disabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    await expect(recordIngestDiagnostics([makeDiagnostic({ sourceKey: "gdelt_events" })])).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceKey: "gdelt_events",
+        }),
+      ])
+    );
+    await expect(getIngestSourceHealthSummaries()).resolves.toEqual([]);
   });
 });

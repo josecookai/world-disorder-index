@@ -17,20 +17,22 @@ describe("scheduled ingest", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    delete process.env.CRON_SECRET;
-    delete process.env.INGEST_SCHEDULE_SECRET;
+    vi.unstubAllEnvs();
+    vi.stubEnv("NODE_ENV", "test");
   });
 
   it("prefers CRON_SECRET and falls back to INGEST_SCHEDULE_SECRET", async () => {
-    process.env.CRON_SECRET = "cron-secret";
-    process.env.INGEST_SCHEDULE_SECRET = "fallback-secret";
+    vi.stubEnv("CRON_SECRET", "cron-secret");
+    vi.stubEnv("INGEST_SCHEDULE_SECRET", "fallback-secret");
 
     const { isValidIngestScheduleSecret } = await import("@/lib/ingest/scheduled");
 
     expect(isValidIngestScheduleSecret("cron-secret")).toBe(true);
     expect(isValidIngestScheduleSecret("fallback-secret")).toBe(false);
 
-    delete process.env.CRON_SECRET;
+    vi.unstubAllEnvs();
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("INGEST_SCHEDULE_SECRET", "fallback-secret");
 
     expect(isValidIngestScheduleSecret("fallback-secret")).toBe(true);
     expect(isValidIngestScheduleSecret("wrong-secret")).toBe(false);
@@ -69,5 +71,22 @@ describe("scheduled ingest", () => {
       expect.any(Error)
     );
     expect(infoSpy).toHaveBeenCalledWith("[scheduled-ingest]", expect.any(String));
+  });
+
+  it("skips local summary persistence when local ingest state is disabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    runIngestPreviewMock.mockResolvedValue({
+      candidates: [],
+      diagnostics: [],
+      sourceHealth: [],
+    });
+    mkdirMock.mockResolvedValue(undefined);
+    writeFileMock.mockResolvedValue(undefined);
+
+    const { runScheduledIngest } = await import("@/lib/ingest/scheduled");
+    const summary = await runScheduledIngest();
+
+    expect(summary.ok).toBe(true);
+    expect(writeFileMock).not.toHaveBeenCalled();
   });
 });
